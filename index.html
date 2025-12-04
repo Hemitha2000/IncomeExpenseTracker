@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Income Expense Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>   
+</head>
+<body class="bg-gray-100 min-h-screen flex items-start justify-center p-6">
+  <div class="w-full max-w-3xl bg-white rounded-2xl shadow p-6 space-y-6">
+
+    <header class="text-center">    
+      <h1 class="text-2xl font-bold text-gray-800">Income / Expense Calculator</h1>
+    </header>
+    <section class="grid grid-cols-3 gap-4">
+      <div class="rounded-lg bg-green-50 p-4 text-center">
+        <div class="text-sm text-gray-600">Total Income</div>    
+        <div id="totalIncome" class="text-xl font-bold text-green-700">₹0</div>
+      </div>
+      <div class="rounded-lg bg-red-50 p-4 text-center">
+        <div class="text-sm text-gray-600">Total Expense</div>
+        <div id="totalExpense" class="text-xl font-bold text-red-700">₹0</div>
+      </div>
+      <div class="rounded-lg bg-blue-50 p-4 text-center">
+        <div class="text-sm text-gray-600">Balance</div>
+        <div id="netBalance" class="text-xl font-bold text-blue-700">₹0</div>
+      </div>
+    </section>
+    <section class="bg-gray-50 border rounded-lg p-4 space-y-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input id="description" type="text" placeholder="Description" class="w-full p-3 rounded-md border" />
+        <input id="amount" type="number" placeholder="Amount" class="w-full p-3 rounded-md border" />
+      </div>
+
+      <div class="flex items-center gap-4">
+        <label class="flex items-center gap-2"><input type="radio" name="type" value="income" checked class="accent-green-500" /> <span>Income</span></label>
+        <label class="flex items-center gap-2"><input type="radio" name="type" value="expense" class="accent-red-500" /> <span>Expense</span></label>
+        <div class="flex-1"></div>
+        <button id="addBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold">Add</button>
+        <button id="resetBtn" class="px-4 py-2 bg-gray-200 rounded-md">Reset</button>
+        <button id="clearAllBtn" class="px-4 py-2 bg-red-600 text-white rounded-md">Clear All</button>
+      </div>
+    </section>
+    <section class="flex justify-center gap-6 text-sm">
+      <label class="flex items-center gap-2"><input type="radio" name="filter" value="all" checked /> All</label>
+      <label class="flex items-center gap-2"><input type="radio" name="filter" value="income" /> Income</label>
+      <label class="flex items-center gap-2"><input type="radio" name="filter" value="expense" /> Expense</label>
+    </section>
+    <section>
+      <ul id="entryList" class="space-y-3"></ul>
+    </section>
+
+    <footer class="text-xs text-gray-500 text-center">Stored in localStorage under key: <code>entries</code></footer>
+  </div>
+  <div id="editModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+      <h2 class="text-xl font-semibold mb-4">Edit Entry</h2>
+      <div class="space-y-3">
+        <input id="editDescription" type="text" class="w-full p-3 border rounded" placeholder="Description" />
+        <input id="editAmount" type="number" class="w-full p-3 border rounded" placeholder="Amount" />
+        <div class="flex gap-4">
+          <label class="flex items-center gap-2"><input id="editTypeIncome" type="radio" name="editType" value="income" class="accent-green-500" /> Income</label>
+          <label class="flex items-center gap-2"><input id="editTypeExpense" type="radio" name="editType" value="expense" class="accent-red-500" /> Expense</label>
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button id="cancelEditBtn" class="px-4 py-2 rounded bg-gray-200">Cancel</button>
+        <button id="saveEditBtn" class="px-4 py-2 rounded bg-blue-600 text-white">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const LS_KEY = 'entries';
+      let entries = [];
+      let editingId = null;
+
+
+      const descriptionEl = document.getElementById('description');
+      const amountEl = document.getElementById('amount');
+      const addBtn = document.getElementById('addBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const clearAllBtn = document.getElementById('clearAllBtn');
+      const entryList = document.getElementById('entryList');
+      const totalIncomeEl = document.getElementById('totalIncome');
+      const totalExpenseEl = document.getElementById('totalExpense');
+      const netBalanceEl = document.getElementById('netBalance');
+      const editModal = document.getElementById('editModal');
+      const editDescriptionEl = document.getElementById('editDescription');
+      const editAmountEl = document.getElementById('editAmount');
+      const saveEditBtn = document.getElementById('saveEditBtn');
+      const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+      function load(){
+        try{ const raw = localStorage.getItem(LS_KEY); entries = raw ? JSON.parse(raw) : []; } catch(e){ console.error(e); entries = []; }
+      }
+      function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(entries)); } catch(e){ console.error(e); } }
+
+      function resetFields(){ descriptionEl.value=''; amountEl.value=''; }
+
+      function getSelectedType(){ const t = document.querySelector('input[name="type"]:checked'); return t ? t.value : 'income'; }
+      function getSelectedFilter(){ const f = document.querySelector('input[name="filter"]:checked'); return f ? f.value : 'all'; }
+
+      function addEntry(){
+        const description = descriptionEl.value.trim();
+        const amountRaw = amountEl.value;
+        const amount = Number(amountRaw);
+        const type = getSelectedType();
+
+        if (!description){ alert('Enter a description'); descriptionEl.focus(); return; }
+        if (amountRaw === '' || isNaN(amount) || amount <= 0){ alert('Enter a valid amount > 0'); amountEl.focus(); return; }
+
+        entries.push({ id: Date.now(), description, amount, type });
+        save(); render(); resetFields();
+      }
+ function deleteEntry(id){ if (!confirm('Delete this entry?')) return; entries = entries.filter(e => e.id !== id); save(); render(); }
+
+      function openEditModal(id){
+        const entry = entries.find(e => e.id === id);
+        if (!entry) return alert('Entry not found');
+        editingId = id;
+        editDescriptionEl.value = entry.description;
+        editAmountEl.value = entry.amount;
+        if (entry.type === 'income') document.getElementById('editTypeIncome').checked = true;
+        else document.getElementById('editTypeExpense').checked = true;
+        editModal.classList.remove('hidden');
+      }
+
+
+      function saveEdit(){
+        const newDesc = editDescriptionEl.value.trim();
+        const newAmtRaw = editAmountEl.value;
+        const newAmt = Number(newAmtRaw);
+        const newType = document.querySelector('input[name="editType"]:checked')?.value || 'income';
+
+        if (!newDesc){ alert('Description required'); return; }
+        if (newAmtRaw === '' || isNaN(newAmt) || newAmt <= 0){ alert('Amount must be > 0'); return; }
+
+        const idx = entries.findIndex(e => e.id === editingId);
+        if (idx === -1) { alert('Entry not found'); closeModal(); return; }
+
+        entries[idx].description = newDesc;
+        entries[idx].amount = newAmt;
+        entries[idx].type = newType;
+        save(); render(); closeModal();
+      }
+
+      function closeModal(){ editingId = null; editModal.classList.add('hidden'); }
+
+      function formatCurrency(v){ return Number(v).toLocaleString('en-IN', {minimumFractionDigits:0, maximumFractionDigits:2}); }
+      function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':'&#39;'})[c] || c); }
+
+      function render(){
+        const filter = getSelectedFilter();
+        entryList.innerHTML = '';
+        let totalIncome = 0, totalExpense = 0;
+
+        const filtered = entries.filter(e => filter === 'all' ? true : e.type === filter);
+
+        if (filtered.length === 0){
+          const empty = document.createElement('div');
+          empty.className = 'text-center text-gray-500 p-6 border rounded-lg';
+          empty.textContent = 'No entries yet.';
+          entryList.appendChild(empty);
+        }
+
+        filtered.slice().reverse().forEach(entry => {
+          if (entry.type === 'income') totalIncome += entry.amount; else totalExpense += entry.amount;
+
+          const li = document.createElement('li');
+          li.className = 'p-4 rounded-lg flex justify-between items-center shadow ' + (entry.type === 'income' ? 'bg-green-50' : 'bg-red-50');
+
+          const left = document.createElement('div');
+          left.className = 'font-medium';
+          left.innerHTML = `${escapeHtml(entry.description)} <span class="text-sm text-gray-500">• ${new Date(entry.id).toLocaleString()}</span>`;
+
+          const right = document.createElement('div');
+          right.className = 'flex items-center gap-3';
+
+          const amt = document.createElement('div');
+          amt.className = 'font-semibold ' + (entry.type === 'income' ? 'text-green-700' : 'text-red-700');
+          amt.textContent = `₹${formatCurrency(entry.amount)}`;
+
+          const editBtn = document.createElement('button');
+          editBtn.className = 'text-blue-600 font-medium';
+          editBtn.textContent = 'Edit';
+          editBtn.addEventListener('click', () => openEditModal(entry.id));
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'text-red-600 font-medium';
+          delBtn.textContent = 'Delete';
+          delBtn.addEventListener('click', () => deleteEntry(entry.id));
+
+          right.appendChild(amt); right.appendChild(editBtn); right.appendChild(delBtn);
+          li.appendChild(left); li.appendChild(right);
+          entryList.appendChild(li);
+        });
+
+        totalIncomeEl.textContent = `₹${formatCurrency(totalIncome)}`;
+        totalExpenseEl.textContent = `₹${formatCurrency(totalExpense)}`;
+        netBalanceEl.textContent = `₹${formatCurrency(totalIncome - totalExpense)}`;
+      }
+
+ 
+      addBtn.addEventListener('click', addEntry);
+      resetBtn.addEventListener('click', resetFields);
+      clearAllBtn.addEventListener('click', function(){ if (confirm('Clear ALL entries?')){ entries = []; save(); render(); } });
+      document.querySelectorAll('input[name="filter"]').forEach(r => r.addEventListener('change', render));
+      saveEditBtn.addEventListener('click', saveEdit);
+      cancelEditBtn.addEventListener('click', closeModal);
+
+      load(); render();
+    })();
+  </script>
+</body>
+</html>
